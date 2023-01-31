@@ -1,0 +1,911 @@
+
+#define _MAIN_C
+#include <string.h>
+#include <stdlib.h>
+#include <Intrins.h>
+#include <Absacc.h>
+#include <math.h>
+//#include <json.h>
+//#include <stdio.h>
+#include <Stdio.h>  // for printf
+
+#include ".\include\REG_MG82F6D17.H"
+#include ".\include\Type.h"
+#include ".\include\API_Macro_MG82F6D17.H"
+#include ".\include\API_Uart_BRGRL_MG82F6D17.H"
+
+
+/*************************************************
+Set SysClk (MAX.50MHz) (MAX.50MHz)
+Selection: 
+	11059200,12000000,
+	22118400,24000000,
+	29491200,32000000,
+	44236800,48000000
+*************************************************/
+#define MCU_SYSCLK	11059200  //12000000 def
+/*************************************************/
+/*************************************************
+Set  CpuClk (MAX.36MHz)
+	1) CpuCLK=SysCLK
+	2) CpuClk=SysClk/2
+*************************************************/
+#define MCU_CPUCLK		(MCU_SYSCLK)
+//#define MCU_CPUCLK		(MCU_SYSCLK/2)
+
+#define TIMER_1T_1ms_TH	((65536-(u16)(float)(1000*((float)(MCU_SYSCLK)/(float)(1000000)))) /256) 			
+#define TIMER_1T_1ms_TL	((65536-(u16)(float)(1000*((float)(MCU_SYSCLK)/(float)(1000000)))) %256)
+
+#define TIMER_12T_1ms_TH	((65536-(u16)(float)(1000*((float)(MCU_SYSCLK)/(float)(12000000)))) /256) 			
+#define TIMER_12T_1ms_TL	((65536-(u16)(float)(1000*((float)(MCU_SYSCLK)/(float)(12000000)))) %256)
+
+#define LED_G_0		P33
+#define LED_R		P34
+#define LED_G_1		P35
+
+
+
+
+
+#define PWM_MIN			(0*1)
+#define PWM_MAX			(1000*1)
+#define PWM_3_4			(750*1)
+#define PWM_2_4			(500*1)
+#define PWM_1_4			(250*1)
+#define PWM_LOW			(40*1)
+#define PWM_HINT		(50*1)
+
+#define PCA_RELOAD		(PWM_MAX)
+
+#define PCA_C           (65536)       	
+
+#define PCA_CL(x)		(u8)((65536-(x))%256) 
+#define PCA_CH(x)     	(u8)((65536-(x))/256)          
+
+idata WordTypeDef wDuty;
+bit bDutyChange;
+u8 DutyFlag;
+
+
+
+
+
+void INT_PCA(void) interrupt INT_VECTOR_PCA
+{
+	WordTypeDef duty;
+	_push_(SFRPI);
+	SFRPI=0;
+	if(CF)
+	{
+		CF=0;
+		// Todo...
+		// ......
+		if(bDutyChange)
+		{
+			duty.W=PCA_C-wDuty.W;
+			PCA_CH2_SetValue(duty.B.BHigh,duty.B.BLow);
+			bDutyChange=FALSE;
+		}
+	}
+	_pop_(SFRPI);
+}
+
+
+
+
+
+/*************************************************
+Function: 		char putchar (char c)   
+Description: 	send for printf
+Input:    		char c
+Output:     
+*************************************************/
+char putchar (char c)   
+{      
+	bit bES;
+	bES=ES0;
+    ES0=0;        
+    S0BUF = c;        
+    while(TI0==0);        
+    TI0=0;        
+    ES0=bES;        
+    return 0;
+}
+
+/*************************************************
+Function:     	void DelayXus(u16 xUs)
+Description:   	dealy£¬unit:us
+Input:     		u8 Us -> *1us  (1~255)
+Output:     
+*************************************************/
+void DelayXus(u8 xUs)
+{
+	while(xUs!=0)
+	{
+#if (MCU_CPUCLK>=11059200)
+		_nop_();
+#endif
+#if (MCU_CPUCLK>=14745600)
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+#endif
+#if (MCU_CPUCLK>=16000000)
+		_nop_();
+#endif
+
+#if (MCU_CPUCLK>=22118400)
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+#endif
+#if (MCU_CPUCLK>=24000000)
+		_nop_();
+		_nop_();
+#endif		
+#if (MCU_CPUCLK>=29491200)
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+		_nop_();
+#endif
+#if (MCU_CPUCLK>=32000000)
+		_nop_();
+		_nop_();
+#endif
+
+		xUs--;
+	}
+}
+
+/*************************************************
+Function:     	void DelayXms(u16 xMs)
+Description:    dealy£¬unit:ms
+Input:     		u16 xMs -> *1ms  (1~65535)
+Output:     
+*************************************************/
+void DelayXms(u16 xMs)
+{
+	while(xMs!=0)
+	{
+		CLRWDT();
+		DelayXus(200);
+		DelayXus(200);
+		DelayXus(200);
+		DelayXus(200);
+		DelayXus(200);
+		xMs--;
+		
+	}
+}
+
+
+
+
+
+
+
+void EnP44P45GPIO(void)
+{
+	u8 x;
+	bit bEA=EA;
+	ISPCR=0x80;
+	IFADRH=0x00;
+	IFADRL=DCON0_P;
+	IFMT=ISP_READ_P;
+	SCMD=0x46;
+	SCMD=0xB9;
+	_nop_();
+	x=IFD;
+	x=x&(~OCDE_P);
+	IFD=x;
+	IFMT=ISP_WRITE_P;
+	SCMD=0x46;
+	SCMD=0xB9;
+	_nop_();
+	ISPCR=0x00;
+	IFMT=ISP_STANBY;
+	
+}
+
+
+
+//Function:   	void EnP47GPIO(void)
+//Description:   	set P47 to GPIO, Disable RESTET function
+//Input:   
+//Output:     
+
+void EnP47GPIO(void)
+{
+	u8 x;
+	bit bEA=EA;
+	ISPCR=0x80;
+	IFADRH=0x00;
+	IFADRL=DCON0_P;
+	IFMT=ISP_READ_P;
+	SCMD=0x46;
+	SCMD=0xB9;
+	_nop_();
+	x=IFD;
+	x=x&(~RSTIO_P);
+	IFD=x;
+	IFMT=ISP_WRITE_P;
+	SCMD=0x46;
+	SCMD=0xB9;
+	_nop_();
+	ISPCR=0x00;
+	IFMT=ISP_STANBY;
+	
+}
+
+
+
+
+
+/***********************************************************************************
+Function:		void IAP_WritePPage(u8 PsfrAddr,u8 PsfrData)
+Description:	write P page sfr
+Input:   
+		 		u8 PsfrAddr: sfr Address
+		 		u8 PsfrData: sfr data
+Output:     
+*************************************************************************************/
+void IAP_WritePPage(u8 PsfrAddr,u8 PsfrData)
+{
+	bit bEA=EA;
+	EA = 0; 					//
+	IFADRH = 0; 				// IFADRH must be 0
+	IFADRL= PsfrAddr;			// sfr Address
+	IFD= PsfrData;				// sfr data
+	IFMT = ISP_WRITE_P;			// write P page sfr
+	ISPCR = 0x80;				// Enable ISP/IAP
+	SCMD = 0x46;
+	SCMD = 0xB9;
+	nop();
+	IFMT=0;
+	ISPCR = 0;					// clear
+	EA = bEA;					
+}
+
+
+/***********************************************************************************
+Function:   	void InitUart0_S0BRG()
+Description:	Initialize Uart0, The source of baud rate was S0BRG
+Input:   
+Output:   		
+*************************************************************************************/
+void InitUart0_S0BRG(void)
+{
+	UART0_SetAccess_S0CR1();			// Enable access S0CR1 
+	UART0_SetMode8bitUARTVar();			// UART0 Mode: 8-bit, Variable B.R.
+	UART0_EnReception();				// Enable reception
+
+	UART0_SetBRGFromS0BRG();			// B.R. source: S0BRG
+	UART0_SetS0BRGBaudRateX2();			// S0BRG x2
+	UART0_SetS0BRGSelSYSCLK();			// S0BRG clock source: SYSCLK
+
+	// Sets B.R. value
+	UART0_SetS0BRGValue(S0BRG_BRGRL_115200_2X_11059200_1T);  
+//	UART0_SetS0BRGValue(S0BRG_BRGRL_9600_2X_12000000_1T);
+
+	UART0_EnS0BRG();					// Enable S0BRG
+}
+
+
+/***********************************************************************************
+Function:   	void InitPort()
+Description:	Initialize IO Port
+Input:   
+Output:   		
+*************************************************************************************/
+void InitPort(void)
+{
+	//PORT_SetP3PushPull(BIT1|BIT3|BIT4|BIT5);
+	PORT_SetP3QuasiBi(BIT1|BIT3|BIT4|BIT5);		// set P30,P31,P33,P34,P35 as Quasi-Bidirectional
+	//PORT_SetP1OpenDrainPu(BIT0|BIT7); // Set P10 as open-drain with pull-high for digital input
+	
+	
+	
+//	PORT_SetP1AInputOnly(BIT7);							// Set P10(AIN0) as Analog-Input-Only for ADC input
+		PORT_SetP1AInputOnly(BIT0|BIT1|BIT2|BIT3|BIT4|BIT5|BIT6|BIT7);							// Set P10(AIN0) as Analog-Input-Only for ADC input
+	 // PORT_SetP3AInputOnly(BIT0);
+	 // PORT_SetP2AInputOnly(BIT2|BIT4);
+	  PORT_SetP4AInputOnly(BIT4|BIT5);
+	   PORT_SetP6AInputOnly(BIT0|BIT1);
+	
+//  PORT_SetP6PushPull(BIT0|BIT1);	
+	
+//	PORT_SetP2PushPull(BIT2|BIT4);
+//	PORT_SetP4PushPull(BIT4|BIT5|BIT7); //working
+/*		PORT_SetP3QuasiBi(BIT0|BIT1|BIT3|BIT4|BIT5);		// set P30,P31,P33,P34,P35 as Quasi-Bidirectional
+	PORT_SetP6PushPull(BIT0|BIT1);						// set P60(PWM2A),P61(PWM2B) as push-pull for PWM output
+PORT_SetP1AInputOnly(BIT5); 
+PORT_SetP1AInputOnly(BIT7); 	*/
+	
+}
+
+
+
+
+/***********************************************************************************
+Function:   	void InitPCA_PWM(void)
+Description:    Initialize PCA for PWM
+Input:   
+Output:     
+*************************************************************************************/
+void InitPCA_PWM(void)
+{
+	PCA_SetCLOCK_SYSCLK();				// PCA clock: SysClk
+	
+	PCA_CH2_SetMode_PWM();				// set CH2 to PWM mode
+
+	PCA_CH2_SetPWM_16Bit();
+
+
+	PCA_SetPWM_EdgeAligned();			// Edge-aligned
+
+	PCA_SetCounter(PCA_C-PCA_RELOAD);
+	PCA_SetCounterReload(PCA_C-PCA_RELOAD);
+
+	PCA_CH2_SetValue(PCA_CH(PWM_MIN),PCA_CL(PWM_MIN));
+
+	PCA_SetPWM2APWM2B_P60P61();			// set PWM2A:P60,PWM2B:P61
+
+	PCA_SetPWM2_DisOutput();			// disable PWM2 output
+	PCA_SetPWM2_2nd_EnOutput();			// enable PWM2A output
+	PCA_SetPWM2_3rd_EnOutput();			// enable PWM2B output
+
+
+	PCA_CF_EnInterrupt();				// Enable PCA CF interrupt
+
+	
+	
+	PCA_EnPCACounter();					// Enable PCA counter
+		
+}
+
+
+
+/***********************************************************************************
+Function:   	void InitInterrupt()
+Description:	Initialize Interrupt
+Input:   
+Output:   		
+*************************************************************************************/
+void InitInterrupt(void)
+{
+	INT_EnPCA();						// Enable PCA interrupt
+}	
+
+
+/***********************************************************************************
+Function:   	void InitClock()
+Description:	Initialize clock
+Input:   
+Output:   		
+*************************************************************************************/
+
+
+
+
+/***********************************************************************************
+Function:   	void InitADC(void)
+Description:   	Initialize ADC
+Input:   
+Output:     
+*************************************************************************************/
+void InitADC(void)
+{
+	ADC_Enable();						// Enable ADC
+	ADC_SetClock_SYSCLK();				// ADC Clock = SYSCLK       sps= 12M/30=600K
+	ADC_SetMode_SetADCS();				// ADC Trigger mode: set ADCS
+	ADC_SetADCData_12Bit();				// ADC Data resolution: 12bit			
+	ADC_SetRightJustified();			// ADC Right-Justified
+
+	IAP_WritePPage(PCON3_P,IVREN_P);	// Enable IVR 1.4V
+}
+
+/***********************************************************************************
+Function:   	u16 GetAdcData()
+Description:	read ADC result of the current channel  
+Input:   
+Output:   		u16 :ADC Value
+*************************************************************************************/
+u16 GetAdcValue()
+{
+	WordTypeDef wAdcValue;
+	ADCON0 = ADCON0|ADCS;							// set ADCS,Start ADC
+    while((ADCON0&ADCI)==0);           				// wait ADC complete
+    wAdcValue.B.BHigh=ADCDH;
+    wAdcValue.B.BLow=ADCDL;
+ 	ADCON0 = ADCON0&(~ADCI);		           		// clear ADCI flag
+ 	return wAdcValue.W&0x0FFF;
+}
+
+
+
+
+
+
+/***********************************************************************************
+Function:   	void InitClock()
+Description:	Initialize clock
+Input:   
+Output:   		
+*************************************************************************************/
+void InitClock(void)
+{
+#if (MCU_SYSCLK==11059200) // 11059200 DEFOULT
+#if (MCU_CPUCLK==MCU_SYSCLK)
+	// SysClk=11.0592MHz CpuClk=11.0592MHz   
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1);
+	
+#else
+	// SysClk=11.0592MHz CpuClk=5.5296MHz
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1);
+#endif
+#endif
+
+#if (MCU_SYSCLK==12000000)
+#if (MCU_CPUCLK==MCU_SYSCLK)
+	// SysClk=12MHz CpuClk=12MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1);
+	
+#else
+	// SysClk=12MHz CpuClk=6MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1);
+#endif
+#endif
+
+#if (MCU_SYSCLK==22118400)
+#if (MCU_CPUCLK==MCU_SYSCLK)
+	// SysClk=22.1184MHz CpuClk=22.1184MHz
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx4, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X4|OSCIn_IHRCO);
+#else
+	// SysClk=22.1184MHz CpuClk=11.0592MHz
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx4, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X4|OSCIn_IHRCO);
+#endif
+#endif
+
+#if (MCU_SYSCLK==24000000)
+#if (MCU_CPUCLK==MCU_SYSCLK)
+	// SysClk=24MHz CpuClk=24MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx4, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X4|OSCIn_IHRCO);
+#else
+	// SysClk=24MHz CpuClk=12MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx4, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X4|OSCIn_IHRCO);
+#endif
+#endif
+
+#if (MCU_SYSCLK==29491200)
+#if (MCU_CPUCLK==MCU_SYSCLK)
+	// SysClk=29.491200MHz CpuClk=29.491200MHz
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx5.33, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X533|OSCIn_IHRCO);
+#else
+	// SysClk=29.491200MHz CpuClk=14.7456MHz
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx5.33, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X533|OSCIn_IHRCO);
+#endif
+#endif
+
+#if (MCU_SYSCLK==32000000)
+#if (MCU_CPUCLK==MCU_SYSCLK)
+	// SysClk=32MHz CpuClk=32MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx5.33, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X533|OSCIn_IHRCO);
+#else
+	// SysClk=32MHz CpuClk=16MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx5.33, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X533|OSCIn_IHRCO);
+#endif
+#endif
+
+
+#if (MCU_SYSCLK==44236800)
+	// SysClk=44.2368MHz CpuClk=22.1184MHz
+	CLK_SetCKCON0(IHRCO_110592MHz|CPUCLK_SYSCLK_DIV_1|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx8, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X8|OSCIn_IHRCO);
+#endif
+
+#if (MCU_SYSCLK==48000000)
+	// SysClk=48MHz CpuClk=24MHz
+	CLK_SetCKCON0(IHRCO_12MHz|CPUCLK_SYSCLK_DIV_2|SYSCLK_MCKDO_DIV_1|ENABLE_CKM|CKM_OSCIN_DIV_2);
+	DelayXus(100);
+	// IHRCO, MCK=CKMIx8, OSCin=IHRCO
+	CLK_SetCKCON2(ENABLE_IHRCO|MCK_CKMI_X8|OSCIn_IHRCO);
+#endif
+
+	// P60 Output MCK/4
+	//CLK_P60OC_MCKDiv4();
+}
+
+
+
+
+
+
+/***********************************************************************************
+Function:       void InitSystem(void)
+Description:    Initialize MCU
+Input:   
+Output:     
+*************************************************************************************/
+void InitSystem(void)
+{
+	InitPort();
+	InitUart0_S0BRG();
+	InitADC();
+	InitClock();
+  	InitPort();
+	 InitUart0_S0BRG();
+	InitPCA_PWM();
+	InitInterrupt();
+	INT_EnAll();
+	
+}
+/*	InitClock();
+	InitPort();
+	InitUart0_S0BRG();
+	InitADC();
+	InitPCA_PWM();
+	InitBOD();
+	InitInterrupt();
+	INT_EnAll(); 	// Enable global interrupt  */
+
+void main()
+{
+		
+	//int time;
+	
+	int i=0;
+	//int wADCValue0,wADCValue1,wADCValue2,wADCValue3,wADCValue4,wADCValue5,wADCValue6,wADCValue7;
+	//int dwTempRF,dwTemp0,dwTemp1,dwTemp2,dwTemp3,dwTemp4,dwTemp5,dwTemp6,dwTemp7;
+	
+
+	//u16
+	//u32
+    InitSystem();
+	
+     EnP44P45GPIO();
+      EnP47GPIO();
+	
+	//char k[]="fg";
+	
+	
+
+//		 __DRV_IVREF_Cmd(ENABLE);	// Eanble IVREF 1.4V
+	
+//	LED_G_0=0;LED_R=0;LED_G_1=0;
+//    DelayXms(1000);
+//	LED_G_0=1;LED_R=1;LED_G_1=1;
+
+	wDuty.W=PWM_2_4;
+	DutyFlag=0x00;
+	while(1)
+    {
+
+ 		//uint myArray[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+
+			
+//	LED_R=1;		
+//	DelayXms(70);		
+//	LED_R=0;		
+//	DelayXms(70);	
+			
+			
+	//__DRV_ADC_PinMux_Select(INTERNAL_VERF);		// Set the ADC channel to IVR 1.4
+		//dwTemp0=GetAdcValue();						// read ADC value
+		
+//  __DRV_ADC_PinMux_Select(AIN7);		// Set the ADC channel to AIN1    ISI KO SAMAJNA HAI
+//		dwTemp1=GetAdcValue();		// read ADC value     SUBHA ISI KO SAMAJANA HAI
+/*		
+		__DRV_ADC_PinMux_Select(AIN5);		// Set the ADC channel to AIN1    ISI KO SAMAJNA HAI
+		dwTemp7=GetAdcValue();		
+		
+		// calculate the P10(AIN0) input voltage
+	wADCValue=(dwTemp1*1790L)/dwTemp0;  // Output the result by UART
+		//(VAR/16.059);
+		//printf("\nP10 V:%d", __DRV_ADC_Start());	
+	//	printf("\n CHECK=%d",AIN1);
+	 // 	VAR=wADCValue/16.0588;
+		VAR=dwTemp1/16.0588;
+		//y=(VAR,0,4095,0,255);
+//ye bhi work	//	a++;   a+1; not work 
+    printf(" ADCN=%d",dwTemp7);
+    printf(" ledread=%d",P34);		
+	  printf(" count=%d", a++);
+	  printf(" HVV=%d",VAR);
+	  printf(" aREF=%d",wADCValue);		
+		printf(" ADC=%d \n",	dwTemp1);	   */
+			
+	
+	
+		
+	/*		
+  	P44=0;
+		P45=0;
+		P47=0;
+		DelayXms(40);
+	  P44=1;
+		P45=1;
+		P47=1;
+		DelayXms(40);
+					
+					
+			
+	P34=1;	
+ // P44=1;
+ // P45=1;			
+	DelayXms(70);		
+	P34=0;
+ // P44=0;
+ // P45=0;			
+	DelayXms(70);		  */
+	
+	
+			
+			
+			
+/*			
+		P35=0;
+		if(P10==0||P11==0)
+		{
+   printf("\n P10=0 ");
+		P61=1;
+		P35=1;
+		DelayXms(200);
+	  P61=0;
+		P35=0;
+		DelayXms(200);
+				
+		}	*/
+		
+	
+int myArray[9];// = { 9999, 10, 20, 30, 40, 50 };	
+
+    ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
+	  myArray[8]=GetAdcValue(); 
+
+		ADC_SetChannel_AIN0();
+		myArray[0]=GetAdcValue();
+		
+	  ADC_SetChannel_AIN1();
+		myArray[1]=GetAdcValue();
+		
+		ADC_SetChannel_AIN2();
+		myArray[2]=GetAdcValue();
+		
+		ADC_SetChannel_AIN3();
+		myArray[3]=GetAdcValue();
+		
+		ADC_SetChannel_AIN4();
+	  myArray[4]=GetAdcValue();
+		
+		ADC_SetChannel_AIN5();
+		myArray[5]=GetAdcValue();
+		
+			ADC_SetChannel_AIN6();
+		myArray[6]=GetAdcValue();
+		
+			ADC_SetChannel_AIN7();
+	   myArray[7]=GetAdcValue();
+		
+     printf("\n"); // new line println		
+ for ( i= 0; i <9; i++) {
+   printf("%d ",myArray[i]); }  
+		DelayXms(50); 
+		
+	//__DRV_ADC_PinMux_Select(INTERNAL_VERF);			
+	 //  ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
+	//	 dwTempRF=GetAdcValue(); // read ADC value
+   	// myArray[0]=GetAdcValue();
+	//	ADC_SetChannel_AIN1();
+	//  printf("  61=%d",GetAdcValue());
+	//	printf("  44=%d",GetAdcValue()); 
+	//	printf(" PIN=%d",GetAdcValue());
+	
+	
+		
+	//	ADC_SetChannel_AIN0();	// Set the ADC channel to AIN0
+	//	dwTemp0=GetAdcValue();  // read ADC value
+ //   printf(" %d", dwTemp0); 
+//		printf("A");
+
+
+  
+	 
+/*
+		wADCValue0=(dwTemp0*1400L)/dwTempRF;
+		printf(" %d", wADCValue0);
+		printf("B");
+				
+	
+		
+		ADC_SetChannel_AIN1();
+		dwTemp1=GetAdcValue();	
+		printf(" %d", dwTemp1);
+    printf("C");		
+		
+		wADCValue1=(dwTemp1*1400L)/dwTempRF;
+		printf(" %d", wADCValue1);
+		printf("D");
+		
+		
+		ADC_SetChannel_AIN2();
+		dwTemp2=GetAdcValue();	
+		printf(" %d", dwTemp2); 
+		printf("E");
+		
+		wADCValue2=(dwTemp2*1400L)/dwTempRF;
+		printf(" %d", wADCValue2);	
+     printf("F");		
+		
+		
+		
+			myArray[2] = dwTemp2;		
+     myArray[4] = dwTemp3;	
+     myArray[8] = dwTemp4;	
+		 myArray[6] = dwTemp6;	
+		 
+		 
+		 
+		ADC_SetChannel_AIN3();
+		dwTemp3=GetAdcValue();
+		printf(" %d", dwTemp3);
+		printf("G");
+		
+		wADCValue3=(dwTemp3*1400L)/dwTempRF;		
+		printf(" %d", wADCValue3); 
+		printf("H");
+		
+			
+		
+		ADC_SetChannel_AIN4();
+		dwTemp4=GetAdcValue();
+		printf(" %d", dwTemp4);
+		printf("I");
+		
+		wADCValue4=(dwTemp4*1400L)/dwTempRF;
+		printf(" %d", wADCValue4);
+    printf("J");		
+			
+			
+			
+		ADC_SetChannel_AIN5();
+		dwTemp5=GetAdcValue();
+		printf(" %d", dwTemp5);
+		printf("K");
+		
+		wADCValue5=(dwTemp5*1400L)/dwTempRF;
+		printf(" %d", wADCValue5);
+    printf("L");	
+		  		
+	 	
+	  ADC_SetChannel_AIN6();
+	  dwTemp6=GetAdcValue();
+		printf(" %d", dwTemp6);
+	  printf("M");
+		
+		wADCValue6=(dwTemp6*1400L)/dwTempRF;
+		printf(" %d", wADCValue6); 
+		printf("N");
+
+	  	 		
+		
+		ADC_SetChannel_AIN7();
+		dwTemp7=GetAdcValue();	
+		printf(" %d", dwTemp7);
+		printf("O");
+		
+		wADCValue7=(dwTemp7*1400L)/dwTempRF;
+  	printf(" %d", wADCValue7);	
+		printf("P");
+		
+		printf(" String");
+		printf("Q");
+		
+    printf(" %f", 68.12345);
+		printf("R");
+
+    printf("\n");
+		
+   DelayXms(20);  */
+	 
+
+	 
+	  // #define FREQUENCY 38000
+
+//int main(void) {
+// time = 0;
+//printf("Generating %d Hz frequency for 5 seconds...\n", FREQUENCY);
+//while (time < 5) {
+//printf("%d\n", FREQUENCY);
+//time++;
+//}
+//printf("Frequency generation complete.\n");
+//return 0;
+//}
+	 
+
+		//printf(" %d %d %d %d %d %d %d %d ",dwTemp0,dwTemp1,dwTemp2,dwTemp3,dwTemp4,dwTemp5,dwTemp6,dwTemp7);	 
+	//printf(" %d %d ",dwTemp6,dwTemp7);
+ // printf("  ref>%d %d %d %d %d %d %d %d ",wADCValue0,wADCValue1,wADCValue2,wADCValue3,wADCValue4,wADCValue5,wADCValue6,wADCValue7);	 
+	//printf("%d\n",wADCValue6);	
+	//printf("ref%d s%d th%d f%d ff%d si%d",wADCValue0,wADCValue1,wADCValue2,wADCValue3,wADCValue4,wADCValue5);
+	//printf("sev%d eg%d \n",wADCValue6,wADCValue7);//printf("sev%d e%d\n",dwTemp6,dwTemp7);				 
+		
+//printf("  string %s\n"," gdfhgrdfghf dfdgdfgdg dfgdgdgfhrfg dgdfgd hgfdehgfdfrgfhgf grfdgdfhf dgefdgd e tgesgfjhfg gfjhtjghr rhrdth hhrrd hrh ");
+		
+	//String stringOne = "Content-Type: text/html";
+// you can also look for a substring in the middle of a string:
+//if (stringOne.substring(14,18) == "gfhjhgjgjgjgfgjgfjhgfjhgjkjkltext") {}
+		//DelayXms(400);	
+		
+		
+	//	P61=3800;
+		//tone(P35, 38000);
+			
+	//printf(" \ncek");	
+//	printf(" \ncek=%d",PWM_2_4);		
+//printf(" pwm=%d\n",wDuty.W);	// PWM WORKING
+   // 	DelayXms(100);
+	//	LED_G_0=!LED_G_0;
+		
+		
+	/*   	
+		if(DutyFlag==0)
+		{
+			wDuty.W=wDuty.W+31;
+			if(wDuty.W >= PWM_MAX)
+			{
+				wDuty.W = PWM_MAX;
+				DutyFlag=1;
+			}
+		}
+		else
+		{
+			if(wDuty.W <24)
+			{
+				wDuty.W = PWM_MIN;
+				DutyFlag=0;
+			}
+			else
+			{
+				wDuty.W=wDuty.W-32;
+			}
+		}
+    	bDutyChange=TRUE;       */		
+				
+    }	
+	
+	
+	}
