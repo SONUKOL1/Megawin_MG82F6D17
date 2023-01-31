@@ -1,0 +1,25 @@
+int serialData[9];
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Hi i'm build this code ");
+}
+
+void loop() {
+  if (Serial.read() == '\n') {  // start bit comm...
+    for (int i = 0; i < 9; i++) {
+      serialData[i] = Serial.parseInt();
+      Serial.print(String(serialData[i]) + " ");  //string convert only print
+    }
+    // Serial.print(serialData[0]);
+    // Serial.print(serialData[1]);
+    // Serial.print(serialData[2]);
+    // Serial.print(serialData[3]);
+    // Serial.print(serialData[4]);
+    // Serial.print(serialData[5]);
+    // Serial.print(serialData[6]);
+    // Serial.println(serialData[7]);
+    // Serial.print(serialData[8]);
+    Serial.println();
+  }
+  Serial.flush();
+}
