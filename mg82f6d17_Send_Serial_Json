@@ -690,10 +690,8 @@ void main()
 		}	*/
 		
 	
+	
 int myArray[9];// = { 9999, 10, 20, 30, 40, 50 };	
-
-    ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
-	  myArray[8]=GetAdcValue(); 
 
 		ADC_SetChannel_AIN0();
 		myArray[0]=GetAdcValue();
@@ -718,12 +716,19 @@ int myArray[9];// = { 9999, 10, 20, 30, 40, 50 };
 		
 			ADC_SetChannel_AIN7();
 	   myArray[7]=GetAdcValue();
+		 
+		ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
+	  myArray[8]=GetAdcValue(); 
 		
      printf("\n"); // new line println		
- for ( i= 0; i <9; i++) {
-   printf("%d ",myArray[i]); }  
-		DelayXms(50); 
-		
+ /* for ( i= 0; i <9; i++) {
+   printf("%d ",myArray[i]); }  */
+	 
+ printf("{\"ADC0\":%u,\"ADC1\":%u,\"ADC2\":%u,\"ADC3\":%u,\"ADC4\":%u}",myArray[0] ,myArray[1] ,myArray[2],myArray[3], myArray[4]);
+ printf("{\"ADC5\":%u,\"ADC6\":%u,\"ADC7\":%u,\"ADCRef\":%u}",myArray[5],myArray[6],myArray[7],myArray[8]);
+
+	DelayXms(50); 
+	 
 	//__DRV_ADC_PinMux_Select(INTERNAL_VERF);			
 	 //  ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
 	//	 dwTempRF=GetAdcValue(); // read ADC value
