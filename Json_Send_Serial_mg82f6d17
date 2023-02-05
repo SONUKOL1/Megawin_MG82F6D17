@@ -14,6 +14,7 @@
 #include ".\include\API_Macro_MG82F6D17.H"
 #include ".\include\API_Uart_BRGRL_MG82F6D17.H"
 
+unsigned int ADC_average(void);
 
 /*************************************************
 Set SysClk (MAX.50MHz) (MAX.50MHz)
@@ -689,45 +690,50 @@ void main()
 				
 		}	*/
 		
-	
-	
-int myArray[9];// = { 9999, 10, 20, 30, 40, 50 };	
+	//	char myA[]="hello";
+
+ int myArray[9];// = { 9999, 10, 20, 30, 40, 50 };	
 
 		ADC_SetChannel_AIN0();
-		myArray[0]=GetAdcValue();
+		myArray[0]=ADC_average(); 
 		
 	  ADC_SetChannel_AIN1();
-		myArray[1]=GetAdcValue();
+		myArray[1]=ADC_average(); 
 		
 		ADC_SetChannel_AIN2();
-		myArray[2]=GetAdcValue();
+		myArray[2]=ADC_average(); 
 		
 		ADC_SetChannel_AIN3();
-		myArray[3]=GetAdcValue();
+		myArray[3]=ADC_average(); 
 		
 		ADC_SetChannel_AIN4();
-	  myArray[4]=GetAdcValue();
+	  myArray[4]=ADC_average(); 
 		
 		ADC_SetChannel_AIN5();
-		myArray[5]=GetAdcValue();
+		myArray[5]=ADC_average(); 
 		
 			ADC_SetChannel_AIN6();
-		myArray[6]=GetAdcValue();
+		myArray[6]=ADC_average(); 
 		
 			ADC_SetChannel_AIN7();
-	   myArray[7]=GetAdcValue();
+	   myArray[7]=ADC_average(); 
 		 
 		ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
-	  myArray[8]=GetAdcValue(); 
+	  myArray[8]=ADC_average();     
 		
-     printf("\n"); // new line println		
+    printf("\n"); // new line println		
  /* for ( i= 0; i <9; i++) {
    printf("%d ",myArray[i]); }  */
 	 
  printf("{\"ADC0\":%u,\"ADC1\":%u,\"ADC2\":%u,\"ADC3\":%u,\"ADC4\":%u}",myArray[0] ,myArray[1] ,myArray[2],myArray[3], myArray[4]);
  printf("{\"ADC5\":%u,\"ADC6\":%u,\"ADC7\":%u,\"ADCRef\":%u}",myArray[5],myArray[6],myArray[7],myArray[8]);
 
-	DelayXms(50); 
+ //scanf("{\"ADC5\":%u,\"ADC6\":%u,\"ADC7\":%u,\"ADCRef\":%u}",&myArray[5],&myArray[6],&myArray[7],&myArray[8]);
+  //printf("{\"ADC5\":%u,\"ADC6\":%u,\"ADC7\":%u,\"ADCRef\":%u}",myArray[5],myArray[6],myArray[7],myArray[8]);
+	
+	//scanf("%s", myA);
+ 
+	  DelayXms(200); 
 	 
 	//__DRV_ADC_PinMux_Select(INTERNAL_VERF);			
 	 //  ADC_SetChannel_IVR14();	// Set the ADC channel to IVR 1.4v
@@ -914,3 +920,18 @@ int myArray[9];// = { 9999, 10, 20, 30, 40, 50 };
 	
 	
 	}
+
+	
+	
+unsigned int ADC_average(void)
+{
+    signed char samples = 100;
+    unsigned long value = 0;   
+    while(samples > 0)
+    {
+        value += ((unsigned long)GetAdcValue());
+        samples--;
+    }  
+    value /= 100; 
+    return ((unsigned int)value);
+}
